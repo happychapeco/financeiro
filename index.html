@@ -357,14 +357,25 @@ function renderTable() {
       <td class="col-curso"><div class="curso-nome" title="${r.cursos}">${r.cursos}</div></td>
       <td class="col-vcto"><span class="${vctoClass}">${vctoDisplay}</span></td>
       <td class="col-pgto">${pgtoDisplay}</td>
-      <td class="col-valor"><span class="valor">R$ \${r.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</span></td>
-      <td class="col-hub" style="color:#16a34a;font-weight:600">R$ \${r.valorHub.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
-      <td class="col-fim">\${r.diasFimContrato !== null ? (r.diasFimContrato <= 0 ? '<span style="color:#dc2626;font-weight:600">Encerrado</span>' : r.diasFimContrato <= 15 ? '<span style="color:#dc2626;font-weight:600">'+r.diasFimContrato+'d</span>' : r.diasFimContrato <= 30 ? '<span style="color:#ea580c;font-weight:600">'+r.diasFimContrato+'d</span>' : r.diasFimContrato <= 60 ? '<span style="color:#854d0e">'+r.diasFimContrato+'d</span>' : '<span style="color:#555">'+r.diasFimContrato+'d</span>') : '-'}</td>
+      <td class="col-valor"><span class="valor">R$ ${r.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</span></td>
+      <td class="col-hub" style="color:#16a34a;font-weight:600">R$ ${r.valorHub.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+      <td class="col-fim">${fimCursoCell(r)}</td>
       <td class="col-status"><span class="badge ${badgeClass}">${r.statusParcela}</span></td>
       <td class="col-alerta">${alertaBadge}</td>
       <td class="col-wpp">${wppBtn}</td>
     </tr>`;
   }).join('');
+}
+
+
+function fimCursoCell(r) {
+  if (r.diasFimContrato === null) return '-';
+  const d = r.diasFimContrato;
+  if (d <= 0) return '<span style="color:#dc2626;font-weight:600">Encerrado</span>';
+  if (d <= 15) return '<span style="color:#dc2626;font-weight:600">' + d + 'd</span>';
+  if (d <= 30) return '<span style="color:#ea580c;font-weight:600">' + d + 'd</span>';
+  if (d <= 60) return '<span style="color:#854d0e">' + d + 'd</span>';
+  return '<span style="color:#555">' + d + 'd</span>';
 }
 
 function enviarWpp(r) {
