@@ -69,6 +69,8 @@ tr:hover td{background:#fafaf8}
 .col-pgto{width:80px}
 .col-valor{width:90px}
 .col-alerta{width:110px}
+.col-hub{width:90px}
+.col-fim{width:90px}
 .col-wpp{width:90px}
 </style>
 </head>
@@ -106,7 +108,10 @@ tr:hover td{background:#fafaf8}
     <button class="filter-btn" onclick="setFilter('avencer',this)">A vencer</button>
     <button class="filter-btn" onclick="setFilter('pagos',this)">Pagos</button>
     <button class="filter-btn" onclick="setFilter('disparar',this)">Disparar hoje</button>
+    <button class="filter-btn" onclick="setFilter('15dias',this)">Fim em 15 dias</button>
+    <button class="filter-btn" onclick="setFilter('30dias',this)">Fim em 30 dias</button>
     <button class="filter-btn" onclick="setFilter('60dias',this)">Fim em 60 dias</button>
+    <button class="filter-btn" onclick="setFilter('90dias',this)">Fim em 90 dias</button>
     <div class="search-wrap">
       <input type="text" id="search" placeholder="Buscar aluno ou responsável..." oninput="renderTable()">
     </div>
@@ -120,7 +125,9 @@ tr:hover td{background:#fafaf8}
           <th class="col-curso">CURSO(S)</th>
           <th class="col-vcto">VCTO</th>
           <th class="col-pgto">PGTO</th>
-          <th class="col-valor">VALOR</th>
+          <th class="col-valor">VALOR BRUTO</th>
+          <th class="col-hub">VALOR HUB</th>
+          <th class="col-fim">FIM CURSO</th>
           <th class="col-status">STATUS</th>
           <th class="col-alerta">ALERTA</th>
           <th class="col-wpp">WHATSAPP</th>
@@ -187,6 +194,18 @@ function parseRows(rows) {
 
     const diffDias = vctoDate ? Math.floor((vctoDate - today) / 86400000) : null;
 
+    // Calcular fim do contrato
+    const inicioStr = r['C29_DT_INICIO_CONTRATO'] || '';
+    const nParcelas = parseInt(r['PARCELAMENTO_CONTRATO']) || 0;
+    const inicioDate = parseDate(inicioStr);
+    let fimContrato = null;
+    let diasFimContrato = null;
+    if (inicioDate && nParcelas > 0) {
+      fimContrato = new Date(inicioDate);
+      fimContrato.setMonth(fimContrato.getMonth() + nParcelas);
+      diasFimContrato = Math.floor((fimContrato - today) / 86400000);
+    }
+
     let statusLabel = parcela;
     if (parcela === 'Pago') statusLabel = 'Pago';
     else if (parcela === 'A gerar') statusLabel = 'A gerar';
@@ -224,6 +243,9 @@ function parseRows(rows) {
         alerta,
         idMatricula: r['ID_MATRICULA'] || '',
         tipoPagamento: r['TIPO_PAGAMENTO'] || '',
+        valorHub: parseFloat(r['VL_PARCELA_HUB']) || 0,
+        fimContrato,
+        diasFimContrato,
       });
     }
   });
@@ -257,7 +279,10 @@ function getFilteredData() {
     if (currentFilter === 'avencer') return r.diffDias !== null && r.diffDias >= 0 && r.statusParcela !== 'Pago';
     if (currentFilter === 'pagos') return r.statusParcela === 'Pago';
     if (currentFilter === 'disparar') return r.diffDias !== null && r.diffDias >= -3 && r.diffDias <= 1 && r.statusParcela !== 'Pago';
-    if (currentFilter === '60dias') return r.diffDias !== null && r.diffDias > 0 && r.diffDias <= 60;
+    if (currentFilter === '15dias') return r.diasFimContrato !== null && r.diasFimContrato >= 0 && r.diasFimContrato <= 15;
+    if (currentFilter === '30dias') return r.diasFimContrato !== null && r.diasFimContrato >= 0 && r.diasFimContrato <= 30;
+    if (currentFilter === '60dias') return r.diasFimContrato !== null && r.diasFimContrato >= 0 && r.diasFimContrato <= 60;
+    if (currentFilter === '90dias') return r.diasFimContrato !== null && r.diasFimContrato >= 0 && r.diasFimContrato <= 90;
     return true;
   });
 }
@@ -279,7 +304,7 @@ function renderMetrics() {
   const receitaPaga = pagos.reduce((s,r) => s + r.valorPago, 0);
   const emAberto = allData.filter(r => r.statusParcela !== 'Pago').reduce((s,r) => s + r.valor, 0);
   const disparar = allData.filter(r => r.diffDias !== null && r.diffDias >= -3 && r.diffDias <= 1 && r.statusParcela !== 'Pago');
-  const fim60 = allData.filter(r => r.diffDias !== null && r.diffDias > 0 && r.diffDias <= 60);
+  const fim60 = allData.filter(r => r.diasFimContrato !== null && r.diasFimContrato >= 0 && r.diasFimContrato <= 60);
 
   document.getElementById('metrics').innerHTML = `
     <div class="mc"><div class="lb">Total alunos</div><div class="vl">${allData.length}</div><div class="sb">ativos: ${ativos.length}</div></div>
@@ -332,7 +357,9 @@ function renderTable() {
       <td class="col-curso"><div class="curso-nome" title="${r.cursos}">${r.cursos}</div></td>
       <td class="col-vcto"><span class="${vctoClass}">${vctoDisplay}</span></td>
       <td class="col-pgto">${pgtoDisplay}</td>
-      <td class="col-valor"><span class="valor">R$ ${r.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</span></td>
+      <td class="col-valor"><span class="valor">R$ \${r.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</span></td>
+      <td class="col-hub" style="color:#16a34a;font-weight:600">R$ \${r.valorHub.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+      <td class="col-fim">\${r.diasFimContrato !== null ? (r.diasFimContrato <= 0 ? '<span style="color:#dc2626;font-weight:600">Encerrado</span>' : r.diasFimContrato <= 15 ? '<span style="color:#dc2626;font-weight:600">'+r.diasFimContrato+'d</span>' : r.diasFimContrato <= 30 ? '<span style="color:#ea580c;font-weight:600">'+r.diasFimContrato+'d</span>' : r.diasFimContrato <= 60 ? '<span style="color:#854d0e">'+r.diasFimContrato+'d</span>' : '<span style="color:#555">'+r.diasFimContrato+'d</span>') : '-'}</td>
       <td class="col-status"><span class="badge ${badgeClass}">${r.statusParcela}</span></td>
       <td class="col-alerta">${alertaBadge}</td>
       <td class="col-wpp">${wppBtn}</td>
