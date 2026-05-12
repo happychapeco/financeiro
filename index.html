@@ -184,8 +184,12 @@ function parseRows(rows) {
     const parcela = r['STATUS_PARCELA'] || '';
     const statusCob = r['STATUS_COBRANCA'] || '';
     
-    // Ignorar cancelados
+    // Ignorar cancelados, inativos e matrículas canceladas
     if (parcela === 'Cancelado') return;
+    const statusAluno = r['STATUS_ALUNO'] || '';
+    const statusMatricula = r['STATUS_MATRICULA'] || '';
+    if (statusAluno === 'Inativo') return;
+    if (statusMatricula === 'Cancelado' || statusMatricula === 'Concluído') return;
 
     const vctoStr = r['C30_DT_VENCIMENTO_PARCELA'] || '';
     const pgtoStr = r['C31_DT_PAGAMENTO'] || '';
