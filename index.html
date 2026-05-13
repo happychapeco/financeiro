@@ -191,6 +191,19 @@ function parseRows(rows) {
     if (statusAluno === 'Inativo') return;
     if (statusMatricula === 'Cancelado' || statusMatricula === 'Concluído') return;
 
+    // Se já existe no map e a linha atual é Pago, atualiza o status
+    if (map.has(key) && parcela === 'Pago') {
+      const existing = map.get(key);
+      existing.statusParcela = 'Pago';
+      existing.valorPago = parseFloat(r['VL_PARCELA_HUB']) || 0;
+      existing.pgtoDate = parseDate(r['C31_DT_PAGAMENTO'] || '');
+      existing.pgtoStr = r['C31_DT_PAGAMENTO'] || '';
+      existing.alerta = 'Pago';
+      return;
+    }
+    // Se já existe e a linha atual NÃO é Pago, pula
+    if (map.has(key) && parcela !== 'Pago') return;
+
     const vctoStr = r['C30_DT_VENCIMENTO_PARCELA'] || '';
     const pgtoStr = r['C31_DT_PAGAMENTO'] || '';
     const vctoDate = parseDate(vctoStr);
