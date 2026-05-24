@@ -175,40 +175,53 @@ function processFile(file) {
 }
 
 function parseRows(rows) {
-  // Group by aluno + financeiro para consolidar múltiplos cursos
   const map = new Map();
   const today = new Date(); today.setHours(0,0,0,0);
 
+  // Pré-processar: para cada aluno (por nome), coletar todos os IDs com Pago
+  const nomeComPago = new Set();
   rows.forEach(r => {
-    const key = `${r['ALUNO']?.trim()}__${r['ID_FINANCEIRO']}`;
+    if ((r['STATUS_PARCELA'] || '') === 'Pago' && (r['STATUS_ALUNO'] || '') === 'Ativo') {
+      nomeComPago.add(r['ALUNO']?.trim());
+    }
+  });
+
+  rows.forEach(r => {
+    const nomeAluno = r['ALUNO']?.trim() || '';
+    const idFin = r['ID_FINANCEIRO'];
+    const key = nomeAluno + '__' + idFin;
     const parcela = r['STATUS_PARCELA'] || '';
-    const statusCob = r['STATUS_COBRANCA'] || '';
-    
-    // Ignorar cancelados, inativos e matrículas canceladas
-    if (parcela === 'Cancelado') return;
     const statusAluno = r['STATUS_ALUNO'] || '';
     const statusMatricula = r['STATUS_MATRICULA'] || '';
+
+    // Ignorar inativos e cancelados
     if (statusAluno === 'Inativo') return;
     if (statusMatricula === 'Cancelado' || statusMatricula === 'Concluído') return;
+    if (parcela === 'Cancelado') return;
 
-    // Se já existe no map e a linha atual é Pago, atualiza o status
-    if (map.has(key) && parcela === 'Pago') {
-      const existing = map.get(key);
-      existing.statusParcela = 'Pago';
-      existing.valorPago = parseFloat(r['VL_PARCELA_HUB']) || 0;
-      existing.pgtoDate = parseDate(r['C31_DT_PAGAMENTO'] || '');
-      existing.pgtoStr = r['C31_DT_PAGAMENTO'] || '';
-      existing.alerta = 'Pago';
+    // Se o aluno tem algum registro Pago, ignorar qualquer linha REPACTUADO dele
+    if (parcela === 'REPACTUADO' && nomeComPago.has(nomeAluno)) return;
+
+    // Se já existe no map com este key
+    if (map.has(key)) {
+      if (parcela === 'Pago') {
+        // Sobrescreve com dados da linha Pago
+        const ex = map.get(key);
+        ex.statusParcela = 'Pago';
+        ex.valor = parseFloat(r['VL_PARCELA']) || ex.valor;
+        ex.valorHub = parseFloat(r['VL_PARCELA_HUB']) || ex.valorHub;
+        ex.valorPago = parseFloat(r['VL_PARCELA_HUB']) || 0;
+        ex.pgtoDate = parseDate(r['C31_DT_PAGAMENTO'] || '');
+        ex.pgtoStr = r['C31_DT_PAGAMENTO'] || '';
+        ex.alerta = 'Pago';
+      }
       return;
     }
-    // Se já existe e a linha atual NÃO é Pago, pula
-    if (map.has(key) && parcela !== 'Pago') return;
 
     const vctoStr = r['C30_DT_VENCIMENTO_PARCELA'] || '';
     const pgtoStr = r['C31_DT_PAGAMENTO'] || '';
     const vctoDate = parseDate(vctoStr);
     const pgtoDate = parseDate(pgtoStr);
-
     const diffDias = vctoDate ? Math.floor((vctoDate - today) / 86400000) : null;
 
     // Calcular fim do contrato
@@ -232,39 +245,29 @@ function parseRows(rows) {
     let alerta = '';
     if (parcela === 'Pago') { alerta = 'Pago'; }
     else if (diffDias !== null) {
-      if (diffDias < 0) alerta = `Vencido há ${Math.abs(diffDias)}d`;
+      if (diffDias < 0) alerta = `Vencido ${Math.abs(diffDias)}d`;
       else if (diffDias === 0) alerta = 'Vence hoje';
       else if (diffDias === 1) alerta = 'Vence amanhã';
       else if (diffDias <= 5) alerta = `Vence em ${diffDias}d`;
       else alerta = formatDate(vctoDate);
     }
 
-    if (map.has(key)) {
-      const existing = map.get(key);
-      existing.cursos += ', ' + (r['CURRICULO'] || '');
-    } else {
-      map.set(key, {
-        nome: r['ALUNO']?.trim() || '',
-        statusAluno: r['STATUS_ALUNO'] || '',
-        responsavel: r['RESPONSAVEL_FINANCEIRO']?.trim() || '',
-        cursos: r['CURRICULO'] || '',
-        vctoStr,
-        vctoDate,
-        pgtoDate,
-        pgtoStr,
-        diffDias,
-        valor: parseFloat(r['VL_PARCELA']) || 0,
-        valorPago: parseFloat(r['VL_PARCELA_HUB']) || 0,
-        statusParcela: statusLabel,
-        statusCob,
-        alerta,
-        idMatricula: r['ID_MATRICULA'] || '',
-        tipoPagamento: r['TIPO_PAGAMENTO'] || '',
-        valorHub: parseFloat(r['VL_PARCELA_HUB']) || 0,
-        fimContrato,
-        diasFimContrato,
-      });
-    }
+    map.set(key, {
+      nome: nomeAluno,
+      statusAluno,
+      responsavel: r['RESPONSAVEL_FINANCEIRO']?.trim() || '',
+      cursos: r['CURRICULO'] || '',
+      vctoStr, vctoDate, pgtoDate, pgtoStr, diffDias,
+      valor: parseFloat(r['VL_PARCELA']) || 0,
+      valorHub: parseFloat(r['VL_PARCELA_HUB']) || 0,
+      valorPago: parcela === 'Pago' ? (parseFloat(r['VL_PARCELA_HUB']) || 0) : 0,
+      statusParcela: statusLabel,
+      statusCob: r['STATUS_COBRANCA'] || '',
+      alerta,
+      idMatricula: r['ID_MATRICULA'] || '',
+      tipoPagamento: r['TIPO_PAGAMENTO'] || '',
+      fimContrato, diasFimContrato,
+    });
   });
 
   return Array.from(map.values()).sort((a,b) => a.nome.localeCompare(b.nome));
