@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Painel Financeiro de Alunos</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,sans-serif;background:#f5f5f0;color:#1a1a1a;font-size:14px}
+header{background:#fff;border-bottom:1px solid #e0e0da;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+header h1{font-size:17px;font-weight:700}
+header p{font-size:11px;color:#999;margin-top:2px}
+.hright{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.btn{background:#fff;border:1px solid #ccc;border-radius:8px;padding:7px 14px;font-size:12px;cursor:pointer;color:#333;font-family:Arial,sans-serif}
+.btn:hover{background:#f0f0ec}
+.btn-blue{background:#1d4ed8;color:#fff;border-color:#1d4ed8}
+.btn-blue:hover{background:#1e40af}
+.metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:10px;padding:14px 24px}
+.mc{background:#fff;border-radius:8px;border:1px solid #e8e8e2;padding:11px 13px}
+.mc .lb{font-size:10px;color:#999;margin-bottom:4px;text-transform:uppercase;letter-spacing:0.04em}
+.mc .vl{font-size:21px;font-weight:700;color:#1a1a1a}
+.mc .sb{font-size:10px;color:#bbb}
+.green{color:#16a34a}.red{color:#dc2626}.orange{color:#ea580c}.blue{color:#1d4ed8}.purple{color:#7c3aed}
+.filters{padding:0 24px 10px;display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.fb{background:#fff;border:1px solid #ddd;border-radius:20px;padding:6px 14px;font-size:12px;cursor:pointer;color:#555;font-family:Arial,sans-serif;white-space:nowrap}
+.fb:hover{background:#f0f0ec}
+.fb.active{background:#1a1a1a;color:#fff;border-color:#1a1a1a}
+.sw{margin-left:auto}
+.sw input{border:1px solid #ddd;border-radius:20px;padding:6px 14px;font-size:12px;width:220px;font-family:Arial,sans-serif;outline:none}
+.tw{padding:0 24px 24px;overflow-x:auto}
+table{width:100%;border-collapse:collapse;background:#fff;border-radius:8px;overflow:hidden;border:1px solid #e8e8e2;font-size:13px}
+th{background:#f9f9f7;padding:10px 12px;text-align:left;font-weight:600;font-size:11px;color:#666;border-bottom:1px solid #e8e8e2;white-space:nowrap}
+td{padding:10px 12px;border-bottom:1px solid #f0f0ec;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#fafaf8}
+tr.risco td{background:#fff5f5!important}
+.badge{display:inline-flex;align-items:center;padding:3px 9px;border-radius:20px;font-size:11px;font-weight:600;white-space:nowrap}
+.bp{background:#dcfce7;color:#166534}
+.bag{background:#fef9c3;color:#854d0e}
+.bge{background:#dbeafe;color:#1e40af}
+.bv{background:#fee2e2;color:#991b1b}
+.br{background:#ede9fe;color:#5b21b6}
+.wbtn{background:#25D366;color:#fff;border:none;border-radius:6px;padding:5px 10px;font-size:11px;cursor:pointer;font-weight:600;white-space:nowrap;font-family:Arial,sans-serif}
+.wbtn:hover{background:#128C7E}
+.rbtn{background:none;border:none;cursor:pointer;font-size:14px;padding:2px 4px;border-radius:4px;opacity:0.3;transition:opacity .15s;line-height:1}
+.rbtn:hover,.rbtn.on{opacity:1;background:#fee2e2}
+.empty{text-align:center;padding:40px;color:#999}
+.uzone{margin:40px auto;max-width:500px;border:2px dashed #ccc;border-radius:12px;padding:40px;text-align:center;background:#fff;cursor:pointer}
+.uzone:hover,.uzone.drag{border-color:#1d4ed8;background:#eff6ff}
+.uzone h2{font-size:16px;color:#333;margin-bottom:8px}
+.uzone p{font-size:13px;color:#999;margin-bottom:16px}
+.uzone .hint{font-size:11px;color:#bbb;margin-top:12px}
+#fi{display:none}
+.sbar{padding:8px 24px;font-size:12px;font-weight:600;display:none}
+.sbar.ok{background:#dcfce7;color:#166534}
+.sbar.err{background:#fee2e2;color:#991b1b}
+.aname{font-weight:600;display:flex;align-items:center;gap:4px}
+.aid{font-size:11px;color:#999}
+.curso{font-size:12px;color:#555;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.venc{white-space:nowrap}
+.venc.late{color:#dc2626;font-weight:600}
+@media print {
+  header .hright { display: none !important; }
+  .filters { display: none !important; }
+  .wbtn { display: none !important; }
+  .rbtn { display: none !important; }
+  #uarea { display: none !important; }
+  #sbar { display: none !important; }
+  body { background: white; font-size: 11px; }
+  .tw { padding: 0; }
+  table { border: 1px solid #ccc; font-size: 10px; }
+  th, td { padding: 6px 8px; }
+  .metrics { padding: 8px 0; }
+  .mc { border: 1px solid #ccc; }
+  @page { margin: 1cm; size: landscape; }
+}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>Painel Financeiro de Alunos</h1>
+    <p id="refp">Importe o arquivo exportado do Space Happy</p>
+  </div>
+  <div class="hright">
+    <button class="btn" onclick="document.getElementById('fi').click()">📂 Importar novo arquivo</button>
+    <input type="file" id="fi" accept=".xlsx,.xls,.csv" onchange="handleFile(event)">
+    <button class="btn btn-blue" onclick="document.getElementById('fi').click()">⟳ Atualizar</button>
+    <button class="btn" onclick="sortByFim()" id="sortbtn" style="display:none">📅 Ordenar por conclusão</button>
+    <button class="btn" onclick="exportXLSX()" id="exportbtn" style="display:none">⬇ Excel</button>
+    <button class="btn" onclick="printPanel()" id="printbtn" style="display:none">🖨 Imprimir</button>
+  </div>
+</header>
+<div id="sbar" class="sbar"></div>
+<div id="uarea">
+  <div class="uzone" id="dz" onclick="document.getElementById('fi').click()">
+    <div style="font-size:40px;margin-bottom:12px">📊</div>
+    <h2>Importe o arquivo do Space Happy</h2>
+    <p>Acesse <strong>space.happy.com.br → Relatório → Financeiro Detalhado → Exportar CSV</strong></p>
+    <button class="btn btn-blue">Selecionar arquivo</button>
+    <div class="hint">Arraste e solte ou clique para selecionar (.xlsx)</div>
+  </div>
+</div>
+<div id="dash" style="display:none">
+  <div class="metrics" id="mets"></div>
+  <div class="filters">
+    <button class="fb active" onclick="setF('todos',this)">Todos</button>
+    <button class="fb" onclick="setF('vencidos',this)">Vencidos</button>
+    <button class="fb" onclick="setF('avencer',this)">A vencer</button>
+    <button class="fb" onclick="setF('pagos',this)">Pagos</button>
+    <button class="fb" onclick="setF('disparar',this)">Disparar hoje</button>
+    <button class="fb" onclick="setF('15d',this)">Fim em 15 dias</button>
+    <button class="fb" onclick="setF('30d',this)">Fim em 30 dias</button>
+    <button class="fb" onclick="setF('60d',this)">Fim em 60 dias</button>
+    <button class="fb" onclick="setF('90d',this)">Fim em 90 dias</button>
+    <div class="sw"><input type="text" id="srch" placeholder="Buscar aluno ou responsável..." oninput="renderT()"></div>
+  </div>
+  <div class="tw">
+    <table>
+      <thead><tr>
+        <th style="min-width:180px">ALUNO</th>
+        <th style="min-width:150px">RESPONSÁVEL</th>
+        <th style="min-width:160px">CURSO(S)</th>
+        <th style="width:80px">VCTO</th>
+        <th style="width:80px">PGTO</th>
+        <th style="width:100px">VALOR BRUTO</th>
+        <th style="width:100px">VALOR HUB</th>
+        <th style="width:80px;cursor:pointer" onclick="toggleSortFim(this)" id="thfim">FIM CURSO ↕</th>
+        <th style="width:110px">STATUS</th>
+        <th style="width:110px">ALERTA</th>
+        <th style="width:100px">WHATSAPP</th>
+      </tr></thead>
+      <tbody id="tb"></tbody>
+    </table>
+  </div>
+</div>
+<script>
+let allData = [];
+let curF = 'todos';
+window._risco = new Set();
+
+// Drag drop
+const dz = document.getElementById('dz');
+dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag'); });
+dz.addEventListener('dragleave', () => dz.classList.remove('drag'));
+dz.addEventListener('drop', e => { e.preventDefault(); dz.classList.remove('drag'); if(e.dataTransfer.files[0]) processFile(e.dataTransfer.files[0]); });
+
+function handleFile(e) { if(e.target.files[0]) processFile(e.target.files[0]); }
+
+function processFile(file) {
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var data = e.target.result;
+      var wb = XLSX.read(data, {type:'binary', raw:true});
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      var rows = XLSX.utils.sheet_to_json(ws, {defval:'', raw:false});
+      if (!rows || rows.length === 0) { showErr('Arquivo vazio ou inválido'); return; }
+      if (!rows[0].hasOwnProperty('ALUNO')) { showErr('Coluna ALUNO não encontrada. Verifique o arquivo.'); return; }
+      allData = parseRows(rows);
+      showDash();
+      showOk('✅ ' + allData.length + ' alunos carregados. ' + new Date().toLocaleTimeString('pt-BR'));
+    } catch(err) {
+      showErr('Erro ao processar: ' + err.message);
+    }
+  };
+  reader.onerror = function() { showErr('Erro ao ler o arquivo.'); };
+  reader.readAsBinaryString(file);
+}
+
+function parseRows(rows) {
+  var today = new Date(); today.setHours(0,0,0,0);
+
+  // Pre-pass: find aluno names that have a Pago record
+  var pagoNomes = {};
+  rows.forEach(function(r) {
+    var sp = String(r['STATUS_PARCELA'] || '').trim();
+    var nome = String(r['ALUNO'] || '').trim().toUpperCase();
+    if (sp === 'Pago') pagoNomes[nome] = true;
+  });
+
+  var map = {};
+  rows.forEach(function(r) {
+    var sa = String(r['STATUS_ALUNO'] || '').trim();
+    var sm = String(r['STATUS_MATRICULA'] || '').trim();
+    var sp = String(r['STATUS_PARCELA'] || '').trim();
+    var nome = String(r['ALUNO'] || '').trim();
+    var nomeUp = nome.toUpperCase();
+    var idFin = String(r['ID_FINANCEIRO'] || '').trim();
+    var key = nomeUp + '__' + idFin;
+
+    // Filter
+    if (sa !== 'Ativo') return;
+    if (sm !== 'Matriculado') return;
+    if (!sp || sp === 'Cancelado' || sp === 'Isento') return;
+    // Ignorar parcela 0 (matrícula) — só mostrar mensalidades
+    var parcAtual = parseInt(r['PARCELA_ATUAL']) || 0;
+    if (parcAtual < 1) return;
+
+    // Skip REPACTUADO if this aluno has a Pago record
+    if (sp === 'REPACTUADO' && pagoNomes[nomeUp]) return;
+
+    // If key exists and new row is Pago, update
+    if (map[key]) {
+      if (sp === 'Pago') {
+        map[key].statusP = 'Pago';
+        map[key].valor = parseFloat(r['VL_PARCELA']) || map[key].valor;
+        map[key].hub = parseFloat(r['VL_PARCELA_HUB']) || map[key].hub;
+        map[key].pgto = fmtD(r['C31_DT_PAGAMENTO']);
+        map[key].alerta = 'Pago';
+      }
+      return;
+    }
+
+    var vctoStr = String(r['C30_DT_VENCIMENTO_PARCELA'] || '').trim();
+    var pgtoStr = String(r['C31_DT_PAGAMENTO'] || '').trim();
+    var vctoD = parseD(vctoStr);
+    var pgtoD = parseD(pgtoStr);
+    var diff = vctoD ? Math.floor((vctoD - today) / 86400000) : null;
+
+    // Contract end - add nParc months to start date
+    var iniStr = String(r['C29_DT_INICIO_CONTRATO'] || '').trim();
+    var nParc = parseInt(r['PARCELAMENTO_CONTRATO']) || 0;
+    var iniParts = iniStr.split('/');
+    var fimD = null, diffFim = null;
+    if (iniParts.length === 3 && nParc > 0) {
+      var id = parseInt(iniParts[0]), im = parseInt(iniParts[1]), iy = parseInt(iniParts[2]);
+      var totalMonths = (iy * 12 + im - 1) + nParc;
+      var fy = Math.floor(totalMonths / 12);
+      var fm = (totalMonths % 12) + 1;
+      fimD = new Date(fy, fm - 1, id);
+      diffFim = Math.floor((fimD.getTime() - today.getTime()) / 86400000);
+    }
+
+    var labelP = sp === 'Pago' ? 'Pago' : sp === 'A gerar' ? 'A gerar' : sp === 'Gerado' ? 'Gerado' : sp === 'REPACTUADO' ? 'Repactuado' : sp;
+
+    var alerta = '';
+    if (sp === 'Pago') alerta = 'Pago';
+    else if (diff !== null) {
+      if (diff < 0) alerta = 'Vencido ' + Math.abs(diff) + 'd';
+      else if (diff === 0) alerta = 'Vence hoje';
+      else if (diff === 1) alerta = 'Vence amanhã';
+      else if (diff <= 5) alerta = 'Vence em ' + diff + 'd';
+      else alerta = fmtD(vctoStr);
+    }
+
+    map[key] = {
+      nome: nome,
+      resp: String(r['RESPONSAVEL_FINANCEIRO'] || '').trim(),
+      curso: String(r['CURRICULO'] || '').trim(),
+      vcto: fmtD(vctoStr),
+      vctoD: vctoD,
+      pgto: fmtD(pgtoStr),
+      diff: diff,
+      valor: parseFloat(r['VL_PARCELA']) || 0,
+      hub: parseFloat(r['VL_PARCELA_HUB']) || 0,
+      statusP: labelP,
+      alerta: alerta,
+      idMat: String(r['ID_MATRICULA'] || '').trim(),
+      tipo: String(r['TIPO_PAGAMENTO'] || '').trim(),
+      diffFim: diffFim,
+    };
+  });
+
+  return Object.values(map).sort(function(a,b){ return a.nome.localeCompare(b.nome); });
+}
+
+function parseD(s) {
+  if (!s || s === '00/00/0000') return null;
+  s = String(s).trim();
+  var p = s.split('/');
+  if (p.length === 3) {
+    var d = parseInt(p[0]), m = parseInt(p[1]), y = parseInt(p[2]);
+    if (d > 0 && m > 0 && y > 0) return new Date(y, m-1, d);
+  }
+  return null;
+}
+function fmtD(s) {
+  if (!s || s === '00/00/0000') return '-';
+  var d = parseD(s);
+  if (!d) return '-';
+  return d.toLocaleDateString('pt-BR', {day:'2-digit',month:'2-digit'});
+}
+
+function getFiltered() {
+  var srch = (document.getElementById('srch').value || '').toLowerCase();
+  return allData.filter(function(r) {
+    var ms = !srch || r.nome.toLowerCase().includes(srch) || r.resp.toLowerCase().includes(srch);
+    if (!ms) return false;
+    if (curF === 'todos') return true;
+    if (curF === 'vencidos') return r.diff !== null && r.diff < 0 && r.statusP !== 'Pago';
+    if (curF === 'avencer') return r.diff !== null && r.diff >= 0 && r.statusP !== 'Pago';
+    if (curF === 'pagos') return r.statusP === 'Pago';
+    if (curF === 'disparar') return r.diff !== null && r.diff >= -3 && r.diff <= 1 && r.statusP !== 'Pago';
+    if (curF === '15d') return r.diffFim !== null && r.diffFim >= 0 && r.diffFim <= 15;
+    if (curF === '30d') return r.diffFim !== null && r.diffFim >= 0 && r.diffFim <= 30;
+    if (curF === '60d') return r.diffFim !== null && r.diffFim >= 0 && r.diffFim <= 60;
+    if (curF === '90d') return r.diffFim !== null && r.diffFim >= 0 && r.diffFim <= 90;
+    return true;
+  });
+}
+
+function showDash() {
+  document.getElementById('uarea').style.display = 'none';
+  document.getElementById('sortbtn').style.display = 'inline-block';
+  document.getElementById('exportbtn').style.display = 'inline-block';
+  document.getElementById('printbtn').style.display = 'inline-block';
+  document.getElementById('dash').style.display = 'block';
+  document.getElementById('refp').textContent = 'Referência: ' + new Date().toLocaleDateString('pt-BR');
+  renderM();
+  renderT();
+}
+
+function renderM() {
+  var pago = allData.filter(function(r){ return r.statusP === 'Pago'; });
+  var venc = allData.filter(function(r){ return r.diff !== null && r.diff < 0 && r.statusP !== 'Pago'; });
+  var aven = allData.filter(function(r){ return r.diff !== null && r.diff >= 0 && r.statusP !== 'Pago'; });
+  var recPaga = pago.reduce(function(s,r){ return s + r.hub; }, 0);
+  var emAberto = allData.filter(function(r){ return r.statusP !== 'Pago'; }).reduce(function(s,r){ return s + r.valor; }, 0);
+  var fim60 = allData.filter(function(r){ return r.diffFim !== null && r.diffFim >= 0 && r.diffFim <= 60; });
+  var disp = allData.filter(function(r){ return r.diff !== null && r.diff >= -3 && r.diff <= 1 && r.statusP !== 'Pago'; });
+  var riscoV = Array.from(window._risco).filter(function(k){ return allData.find(function(r){ return r.nome+'__'+r.idMat === k; }); });
+  var prevReal = allData.filter(function(r){ return r.statusP !== 'Pago' && !window._risco.has(r.nome+'__'+r.idMat); }).reduce(function(s,r){ return s+r.valor; }, 0);
+
+  var f = function(n){ return 'R$\u00a0' + n.toLocaleString('pt-BR',{minimumFractionDigits:2}); };
+  document.getElementById('mets').innerHTML =
+    mc('Total alunos', allData.length, 'ativos: '+allData.length, '') +
+    mc('Pagos', pago.length, 'este mês', 'green') +
+    mc('A vencer', aven.length, 'pendentes', 'orange') +
+    mc('Vencidos', venc.length, 'em atraso', 'red') +
+    mc('Receita paga', f(recPaga), '', 'green') +
+    mc('Em aberto', f(emAberto), '', 'red') +
+    mc('Previsão real 🚩', f(prevReal), riscoV.length + ' em risco', 'purple') +
+    mc('Fim em 60d', fim60.length, 'oferecer curso', 'blue') +
+    mc('Disparar hoje', disp.length, 'cobranças', 'blue');
+}
+
+function mc(lb, vl, sb, cls) {
+  return '<div class="mc"><div class="lb">'+lb+'</div><div class="vl '+cls+'">'+vl+'</div><div class="sb">'+sb+'</div></div>';
+}
+
+function renderT() {
+  var data = getFiltered();
+  var tb = document.getElementById('tb');
+  if (!data.length) { tb.innerHTML = '<tr><td colspan="11" class="empty">Nenhum aluno encontrado</td></tr>'; return; }
+
+  tb.innerHTML = data.map(function(r) {
+    var rk = r.nome + '__' + r.idMat;
+    var isRisco = window._risco.has(rk);
+
+    var bc = r.statusP === 'Pago' ? 'bp' : r.statusP === 'A gerar' ? 'bag' : r.statusP === 'Gerado' ? 'bge' : r.statusP === 'Repactuado' ? 'br' : (r.diff !== null && r.diff < 0 ? 'bv' : 'bag');
+    var ab = r.statusP === 'Pago' ? '<span class="badge bp">Pago</span>' :
+             r.diff !== null && r.diff < 0 ? '<span class="badge bv">Vencido '+Math.abs(r.diff)+'d</span>' :
+             r.diff === 0 ? '<span class="badge bag">Vence hoje</span>' :
+             r.diff === 1 ? '<span class="badge bag">Vence amanhã</span>' :
+             r.alerta ? '<span class="badge" style="background:#f3f4f6;color:#374151">'+r.alerta+'</span>' : '-';
+    var fim = r.diffFim === null ? '-' :
+              r.diffFim <= 0 ? '<span style="color:#dc2626;font-weight:600">Encerrado</span>' :
+              r.diffFim <= 15 ? '<span style="color:#dc2626;font-weight:600">'+r.diffFim+'d</span>' :
+              r.diffFim <= 30 ? '<span style="color:#ea580c;font-weight:600">'+r.diffFim+'d</span>' :
+              r.diffFim <= 60 ? '<span style="color:#854d0e">'+r.diffFim+'d</span>' :
+              '<span style="color:#555">'+r.diffFim+'d</span>';
+    var wpp = r.statusP !== 'Pago' ? '<button class="wbtn" onclick=\'enviarWpp('+JSON.stringify(r)+')\'>Cobrar WA</button>' : '-';
+    var vcClass = r.diff !== null && r.diff < 0 && r.statusP !== 'Pago' ? 'venc late' : 'venc';
+
+    return '<tr class="'+(isRisco?'risco':'')+'">' +
+      '<td><div class="aname"><button class="rbtn '+(isRisco?'on':'')+'" onclick="toggleR(\''+rk.replace(/'/g,"\\'")+'\')" title="Sinalizar risco">🚩</button>'+r.nome+'</div><div class="aid">#'+r.idMat+'</div></td>' +
+      '<td>'+r.resp+'</td>' +
+      '<td><div class="curso" title="'+r.curso+'">'+r.curso+'</div></td>' +
+      '<td><span class="'+vcClass+'">'+r.vcto+'</span></td>' +
+      '<td>'+r.pgto+'</td>' +
+      '<td style="font-weight:600">R$ '+r.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})+'</td>' +
+      '<td style="font-weight:600;color:#16a34a">R$ '+r.hub.toLocaleString('pt-BR',{minimumFractionDigits:2})+'</td>' +
+      '<td>'+fim+'</td>' +
+      '<td><span class="badge '+bc+'">'+r.statusP+'</span></td>' +
+      '<td>'+ab+'</td>' +
+      '<td>'+wpp+'</td>' +
+      '</tr>';
+  }).join('');
+}
+
+function sortByFim() { toggleSortFim(document.getElementById('thfim')); }
+function toggleSortFim(th) {
+  sortFim = !sortFim;
+  if (sortFim) {
+    allData.sort(function(a,b){
+      if (a.diffFim === null && b.diffFim === null) return 0;
+      if (a.diffFim === null) return 1;
+      if (b.diffFim === null) return -1;
+      return a.diffFim - b.diffFim;
+    });
+    if(th) th.textContent = 'FIM CURSO ↑';
+    var btn = document.getElementById('sortbtn');
+    if(btn){ btn.textContent='📅 A→Z nome'; btn.style.background='#1a1a1a'; btn.style.color='#fff'; }
+  } else {
+    allData.sort(function(a,b){ return a.nome.localeCompare(b.nome); });
+    if(th) th.textContent = 'FIM CURSO ↕';
+    var btn = document.getElementById('sortbtn');
+    if(btn){ btn.textContent='📅 Ordenar por conclusão'; btn.style.background=''; btn.style.color=''; }
+  }
+  renderT();
+}
+
+function exportXLSX() {
+  var data = getFiltered();
+  var rows = [['Aluno','Responsável','Curso','Vencimento','Pagamento','Valor Bruto','Valor HUB','Fim Curso (dias)','Status','Alerta']];
+  data.forEach(function(r) {
+    rows.push([
+      r.nome, r.resp, r.curso, r.vcto, r.pgto,
+      r.valor, r.hub,
+      r.diffFim !== null ? r.diffFim : '',
+      r.statusP, r.alerta
+    ]);
+  });
+  var wb = XLSX.utils.book_new();
+  var ws = XLSX.utils.aoa_to_sheet(rows);
+  ws['!cols'] = [{wch:35},{wch:30},{wch:35},{wch:12},{wch:12},{wch:14},{wch:14},{wch:16},{wch:14},{wch:18}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Financeiro');
+  XLSX.writeFile(wb, 'painel_happy_' + new Date().toLocaleDateString('pt-BR').replace(/\//g,'-') + '.xlsx');
+}
+
+function printPanel() {
+  window.print();
+}
+
+function toggleR(key) {
+  if (window._risco.has(key)) window._risco.delete(key);
+  else window._risco.add(key);
+  renderT(); renderM();
+}
+
+function enviarWpp(r) {
+  var vcto = r.vcto !== '-' ? r.vcto : '';
+  var status = r.diff !== null && r.diff < 0 ? 'está *em atraso*' : 'vence em breve';
+  var msg = 'Olá ' + r.resp.split(' ')[0] + '! 👋\n\nPassando para lembrar que a mensalidade de *' + r.nome + '* ' + status + '.\n\n💰 Valor: *R$ ' + r.valor.toLocaleString('pt-BR',{minimumFractionDigits:2}) + '*\n📅 Vencimento: ' + vcto + '\n\nQualquer dúvida, estamos à disposição!\n\n*Escola Happy* 🎒';
+  window.open('https://wa.me/?text=' + encodeURIComponent(msg), '_blank');
+}
+
+function setF(f, btn) {
+  curF = f;
+  document.querySelectorAll('.fb').forEach(function(b){ b.classList.remove('active'); });
+  btn.classList.add('active');
+  renderT();
+}
+
+function showOk(msg) {
+  var b = document.getElementById('sbar');
+  b.textContent = msg; b.className = 'sbar ok'; b.style.display = 'block';
+  setTimeout(function(){ b.style.display='none'; }, 5000);
+}
+function showErr(msg) {
+  var b = document.getElementById('sbar');
+  b.textContent = '❌ ' + msg; b.className = 'sbar err'; b.style.display = 'block';
+}
+</script>
+</body>
+</html>
