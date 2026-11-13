@@ -123,6 +123,14 @@ tbody tr.risco td{background:rgba(239,68,68,.06)}
 .cmp td,.cmp th{padding:9px 12px}
 .cmp td.lead{color:var(--text);font-weight:600;white-space:nowrap}
 .delta{font-size:10px;margin-left:6px}
+.pwrap{padding:0 28px 28px}
+.pwrap .metrics,.pwrap .filters,.pwrap .tw{padding-left:0;padding-right:0}
+.pwrap .metrics{grid-template-columns:repeat(auto-fit,minmax(185px,1fr))}
+.pwrap .mc-vl{font-size:19px;white-space:nowrap}
+.pwrap .agrid2{grid-template-columns:1fr}
+.obs{font-size:11px;color:#fbbf24;max-width:180px}
+.tel{font-family:'JetBrains Mono',monospace;font-size:11px;white-space:nowrap}
+body.parc-on #units,body.parc-on #units+.howto,body.parc-on #useg{display:none}
 @media (max-width:640px){
   .hdr,.tabs,.units,.howto,.metrics,.filters,.tw,.analytics,#sbar{padding-left:16px;padding-right:16px}
   .sw{margin-left:0;width:100%}.sw input{width:100%}
@@ -168,6 +176,7 @@ tbody tr.risco td{background:rgba(239,68,68,.06)}
 <div class="tabs" id="tabs">
   <button class="tab active" onclick="switchTab('painel',this)">📋 Painel</button>
   <button class="tab" onclick="switchTab('analytics',this)">📊 Analytics</button>
+  <button class="tab" onclick="switchTab('parc',this)">🏫 Escolas parceiras</button>
 </div>
 
 <div class="page active" id="page-painel">
@@ -204,6 +213,12 @@ tbody tr.risco td{background:rgba(239,68,68,.06)}
 </div>
 <div class="page" id="page-analytics">
   <div class="analytics" id="an"></div>
+</div>
+<div class="page" id="page-parc">
+  <div class="units" id="p-card"></div>
+  <div class="howto">Planilha de alunos de Florianópolis que <strong>não estão no Space</strong> (escolas parceiras e escola própria). Importe sempre no mesmo formato; cada importação substitui a anterior e guarda o resumo do mês.</div>
+  <input type="file" id="pfi" accept=".xlsx,.xls" style="display:none" onchange="if(this.files[0])processParc(this.files[0])">
+  <div id="p-body"></div>
 </div>
 
 <script>
@@ -529,7 +544,9 @@ function switchTab(tab,btn){
   document.querySelectorAll('.tab').forEach(function(b){b.classList.remove('active');});btn.classList.add('active');
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
   document.getElementById('page-'+tab).classList.add('active');
+  document.body.classList.toggle('parc-on',tab==='parc');
   if(tab==='analytics')renderAnalytics();
+  if(tab==='parc')renderParc();
 }
 function exportXLSX(){
   var data=getFiltered();
@@ -643,7 +660,236 @@ var _sbT;
 function showOk(m){var b=document.getElementById('sbar');b.textContent=m;b.className='ok';b.style.display='block';clearTimeout(_sbT);_sbT=setTimeout(function(){b.style.display='none';},6000);}
 function showErr(m){var b=document.getElementById('sbar');b.textContent='✕ '+m;b.className='err';b.style.display='block';clearTimeout(_sbT);}
 
+/* ===== Escolas parceiras (alunos de Floripa fora do Space) ===== */
+var PARC_KEY='happy_parceiras_v1';
+var parc={data:null,hist:{}}, pF='faltam', pEsc='todas', _pRows=[];
+var ESC_PROPRIA='Escola própria';
+var MES_NUM={jan:1,fev:2,mar:3,abr:4,mai:5,jun:6,jul:7,ago:8,set:9,out:10,nov:11,dez:12};
+var MES_NOME=['','Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+
+function loadParc(){try{var s=JSON.parse(localStorage.getItem(PARC_KEY)||'null');if(s)parc=s;}catch(e){}parc.hist=parc.hist||{};}
+function saveParc(){try{localStorage.setItem(PARC_KEY,JSON.stringify(parc));}catch(e){showErr('Não foi possível salvar neste navegador.');}}
+function norm(t){return String(t==null?'':t).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();}
+function xlDate(v){
+  if(typeof v==='number'&&v>30000&&v<80000){var d=new Date(Math.round((v-25569)*864e5));return new Date(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate());}
+  if(v instanceof Date)return v;
+  return parseD(String(v||'').trim());
+}
+function isNum(v){return typeof v==='number'||/^\s*-?[\d.,]+\s*$/.test(String(v||''));}
+
+function parseParc(aoa){
+  var h=-1;
+  for(var i=0;i<Math.min(aoa.length,15);i++){if((aoa[i]||[]).some(function(c){return norm(c)==='alunos'||norm(c)==='aluno';})){h=i;break;}}
+  if(h<0)throw new Error('não achei a coluna "Alunos". Use a planilha no mesmo formato.');
+  var H=aoa[h].map(norm), C={};
+  function find(fn){for(var j=0;j<H.length;j++)if(fn(H[j]))return j;return -1;}
+  C.nome=find(function(x){return x==='alunos'||x==='aluno';});
+  C.resp=find(function(x){return x.indexOf('responsavel')===0;});
+  C.tel=find(function(x){return x.indexOf('telefone')===0;});
+  C.curso=find(function(x){return x.indexOf('curso')===0;});
+  C.pag=find(function(x){return x.indexOf('pagador')===0;});
+  C.esc=find(function(x){return x.indexOf('escola')===0;});
+  C.valor=find(function(x){return x.indexOf('valor')===0;});
+  C.rep=find(function(x){return x.indexOf('repasse')===0;});
+  C.ab=find(function(x){return x.indexOf('em aberto')===0;});
+  C.rec=find(function(x){return x.indexOf('recebido')===0;});
+  C.forma=find(function(x){return x.indexOf('forma')===0;});
+  C.obs=find(function(x){return x.indexOf('obs')===0;});
+  C.dt=(C.rec>=0&&!H[C.rec+1])?C.rec+1:-1;
+  if(C.valor<0||C.rec<0)throw new Error('faltam as colunas "Valor mensalidade" ou "Recebido".');
+  // mês de referência: "Recebido Nov"
+  var hoje=new Date(), mm=MES_NUM[(H[C.rec].replace('recebido','').trim()).slice(0,3)]||(hoje.getMonth()+1);
+  var yy=hoje.getFullYear(); if(mm>hoje.getMonth()+2)yy--;
+  var g=function(r,k){return C[k]>=0?r[C[k]]:'';}, gs=function(r,k){var v=g(r,k);return String(v==null?'':v).trim();};
+  var out=[];
+  for(var i=h+1;i<aoa.length;i++){
+    var r=aoa[i]||[], nome=gs(r,'nome');
+    if(!nome)continue;
+    var curso=gs(r,'curso'), pag=gs(r,'pag');
+    if(curso&&!/\d\s*h/i.test(curso)){if(!pag)pag=curso;curso='';}
+    var valor=num(g(r,'valor')), rep=num(g(r,'rep')), ab=norm(g(r,'ab')), recRaw=g(r,'rec'), rec=isNum(recRaw)?num(recRaw):0;
+    var forma=gs(r,'forma'), obs=gs(r,'obs'), dtRaw=C.dt>=0?r[C.dt]:'', dp=xlDate(dtRaw);
+    var esc=gs(r,'esc')||ESC_PROPRIA, fl=norm(forma);
+    var st;
+    if(ab.indexOf('cancel')>=0||norm(dtRaw).indexOf('cancel')>=0)st='Cancelado';
+    else if(fl.indexOf('colegio')>=0)st='Escola cobra';
+    else if(ab.indexOf('ok')===0||fl.indexOf('pagou tudo')>=0||rec>0)st='Pago';
+    else if(valor<=0)st='Sem valor';
+    else st='Falta pagar';
+    var repRec=rep<=0?0:rep<1?rec*rep:(rec>0?rep:0);
+    var repEsp=rep<=0?0:rep<1?valor*rep:rep;
+    out.push({nome:nome.replace(/[\s,\-]+$/,''),resp:gs(r,'resp'),tel:gs(r,'tel'),curso:curso,pag:pag,esc:esc.replace(/\s+$/,''),
+      valor:valor,rep:rep,repEsp:repEsp,rec:rec,repRec:repRec,dp:dp?dp.toISOString():null,forma:forma,obs:obs,status:st,
+      atraso:/n[aã]o pagou/i.test(obs)?obs.replace(/^\s+/,''):'',dif:(st==='Pago'&&rec>0&&Math.abs(rec-valor)>0.5)?rec-valor:0});
+  }
+  return {rows:out,mes:yy+'-'+String(mm).padStart(2,'0')};
+}
+function processParc(file){
+  var reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      var wb=XLSX.read(new Uint8Array(e.target.result),{type:'array'});
+      var aoa=XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{header:1,defval:'',raw:true});
+      var res=parseParc(aoa);
+      if(!res.rows.length){showErr('Nenhum aluno encontrado na planilha.');return;}
+      parc.data={rows:res.rows,mes:res.mes,importedAt:new Date().toISOString(),fileName:file.name};
+      var t=pTotais(res.rows);
+      parc.hist[res.mes]={alunos:t.ativos,pagos:t.pagos,esperado:round2(t.esperado),recebido:round2(t.recebido),falta:round2(t.falta),liquido:round2(t.liquido)};
+      saveParc();renderParc();
+      showOk('✓ Escolas parceiras: '+res.rows.length+' alunos importados · '+new Date().toLocaleTimeString('pt-BR'));
+    }catch(err){showErr('Não consegui ler a planilha: '+err.message);}
+  };
+  reader.onerror=function(){showErr('Não consegui abrir o arquivo.');};
+  reader.readAsArrayBuffer(file);
+  document.getElementById('pfi').value='';
+}
+function pTotais(rows){
+  var t={ativos:0,pagos:0,faltam:0,esperado:0,recebido:0,falta:0,repasse:0,liquido:0,atraso:0,escola:0};
+  rows.forEach(function(r){
+    if(r.status==='Cancelado')return;
+    t.ativos++;
+    if(r.status==='Escola cobra'){t.escola++;return;}
+    t.esperado+=r.valor;t.recebido+=r.rec;t.repasse+=r.repRec;
+    if(r.status==='Pago')t.pagos++;
+    if(r.status==='Falta pagar'){t.faltam++;t.falta+=r.valor;}
+    if(r.atraso)t.atraso++;
+  });
+  t.liquido=t.recebido-t.repasse;return t;
+}
+var P_FILT=[['faltam','Faltam pagar',function(r){return r.status==='Falta pagar';}],['pagos','Pagos',function(r){return r.status==='Pago';}],
+  ['atraso','Atraso anterior',function(r){return !!r.atraso;}],['dif','Valor diferente',function(r){return r.dif!==0;}],
+  ['escola','Escola cobra',function(r){return r.status==='Escola cobra';}],['sem','Sem valor',function(r){return r.status==='Sem valor';}],
+  ['canc','Cancelados',function(r){return r.status==='Cancelado';}],['todos','Todos',function(){return true;}]];
+function pMatch(r,F){var x=P_FILT.find(function(p){return p[0]===F;});return x?x[2](r):true;}
+function pFiltered(){
+  var q=norm((document.getElementById('psrch')||{value:''}).value);
+  return parc.data.rows.filter(function(r){
+    if(pEsc!=='todas'&&r.esc!==pEsc)return false;
+    if(q&&norm(r.nome+' '+r.resp+' '+r.pag).indexOf(q)<0)return false;
+    return pMatch(r,pF);
+  });
+}
+function waNum(t){
+  var d=String(t||'').replace(/\D/g,'');
+  if(String(t).indexOf('+')>=0)return d;
+  if(d.length===8||d.length===9)return '5548'+d;
+  if(d.length===10||d.length===11)return '55'+d;
+  return d.length>=12?d:'';
+}
+function renderParc(){
+  var d=parc.data;
+  document.getElementById('p-card').innerHTML=
+    '<div class="ucard'+(d?' loaded':'')+'" id="pdz" onclick="document.getElementById(\'pfi\').click()" role="button" tabindex="0" aria-label="Importar planilha das escolas parceiras">'+
+    '<div class="uinfo"><h3><span class="dot floripa"></span>Florianópolis · fora do Space</h3>'+
+    '<p>'+(d?'Arraste a planilha nova para atualizar.':'Arraste aqui a planilha "Aluno - Escolas" ou clique.')+'</p>'+
+    '<div class="umeta">'+(d?esc('Importado '+new Date(d.importedAt).toLocaleString('pt-BR',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'})+' · '+d.rows.length+' alunos · ref. '+MES_NOME[+d.mes.slice(5)]+'/'+d.mes.slice(0,4)):'Nenhuma planilha importada')+'</div></div>'+
+    '<div class="uact"><span class="hbtn primary">'+(d?'⟳ Atualizar':'↑ Importar')+'</span>'+(d?'<button class="hbtn" onclick="event.stopPropagation();exportParc()">⬇ Excel</button>':'')+'</div></div>';
+  var dz=document.getElementById('pdz');
+  dz.addEventListener('dragover',function(e){e.preventDefault();dz.classList.add('drag');});
+  dz.addEventListener('dragleave',function(){dz.classList.remove('drag');});
+  dz.addEventListener('drop',function(e){e.preventDefault();dz.classList.remove('drag');if(e.dataTransfer.files[0])processParc(e.dataTransfer.files[0]);});
+  dz.addEventListener('keydown',function(e){if(e.key==='Enter'||e.key===' '){e.preventDefault();document.getElementById('pfi').click();}});
+  var body=document.getElementById('p-body');
+  if(!d){body.innerHTML='<div class="emptyst"><h2>Nenhuma planilha importada ainda</h2>Importe a planilha de alunos das escolas parceiras no cartão acima.<br>Os dados ficam salvos neste navegador até a próxima importação.</div>';return;}
+  if(_ch.pEsc){_ch.pEsc.destroy();_ch.pEsc=null;} if(_ch.pHist){_ch.pHist.destroy();_ch.pHist=null;}
+
+  var all=d.rows, base=pEsc==='todas'?all:all.filter(function(r){return r.esc===pEsc;}), T=pTotais(base);
+  var pct=T.esperado>0?T.recebido/T.esperado*100:0;
+  // por escola
+  var escs={};all.forEach(function(r){(escs[r.esc]=escs[r.esc]||[]).push(r);});
+  var nomes=Object.keys(escs).sort(function(a,b){if(a===ESC_PROPRIA)return 1;if(b===ESC_PROPRIA)return -1;return pTotais(escs[b]).ativos-pTotais(escs[a]).ativos;});
+  var ST={};nomes.forEach(function(n){ST[n]=pTotais(escs[n]);});
+  var repTxt=function(n){var s={};escs[n].forEach(function(r){if(r.rep>0)s[r.rep<1?Math.round(r.rep*100)+'%':'R$ '+r.rep]=1;});return Object.keys(s).join(' / ')||'—';};
+  var tot=pTotais(all);
+  var hk=Object.keys(parc.hist).sort();
+
+  var html='<div class="pwrap">'+
+    '<div class="sep"><div class="sep-lb">'+MES_NOME[+d.mes.slice(5)]+' — '+(pEsc==='todas'?'todas as escolas':esc(pEsc))+'</div><div class="sep-line"></div></div>'+
+    '<div class="metrics">'+
+      mc('Alunos ativos',T.ativos,(T.escola?T.escola+' pagam direto à escola':'sem cancelados'),'')+
+      mc('Pagaram',T.pagos,Math.round(T.ativos-T.escola?T.pagos/(T.ativos-T.escola)*100:0)+'% dos que pagam à Happy','cg')+
+      mc('Faltam pagar',T.faltam,f(T.falta),'cr')+
+      mc('Atraso anterior',T.atraso,'meses passados em aberto','ca')+
+      mc('Mensalidades',f(T.esperado),'esperado no mês','cb')+
+      mc('Recebido',f(T.recebido),pct.toFixed(0)+'% do esperado','cg')+
+      mc('Repasse escolas',f(T.repasse),'sobre o recebido','cp')+
+      mc('Líquido Happy',f(T.liquido),'recebido − repasse','cg')+
+    '</div>'+
+    '<div class="sep"><div class="sep-lb">Por escola</div><div class="sep-line"></div></div>'+
+    '<div class="agrid2"><div class="cc"><h3>Resumo por escola</h3><div class="tscroll"><table class="cmp"><thead><tr><th>Escola</th><th class="num">Alunos</th><th class="num">Pagos</th><th class="num">Faltam</th><th class="num">Esperado</th><th class="num">Recebido</th><th class="num">A receber</th><th class="num">Repasse</th><th class="num">Líquido</th></tr></thead><tbody>'+
+      nomes.map(function(n){var s=ST[n];return '<tr style="cursor:pointer" onclick="setPEsc(\''+esc(n).replace(/'/g,"\\'")+'\')"><td class="lead">'+esc(n)+'<div class="aid">repasse '+repTxt(n)+'</div></td><td class="num jmono">'+s.ativos+'</td><td class="num jmono" style="color:var(--green)">'+s.pagos+'</td><td class="num jmono" style="color:'+(s.faltam?'var(--red)':'var(--text3)')+'">'+s.faltam+'</td><td class="num jmono">'+f(s.esperado)+'</td><td class="num jmono" style="color:var(--green)">'+f(s.recebido)+'</td><td class="num jmono" style="color:var(--red)">'+f(s.falta)+'</td><td class="num jmono muted">'+f(s.repasse)+'</td><td class="num jmono" style="color:var(--text)">'+f(s.liquido)+'</td></tr>';}).join('')+
+      '<tr style="border-top:2px solid var(--border2)"><td class="lead">Total</td><td class="num jmono">'+tot.ativos+'</td><td class="num jmono">'+tot.pagos+'</td><td class="num jmono">'+tot.faltam+'</td><td class="num jmono">'+f(tot.esperado)+'</td><td class="num jmono">'+f(tot.recebido)+'</td><td class="num jmono">'+f(tot.falta)+'</td><td class="num jmono">'+f(tot.repasse)+'</td><td class="num jmono" style="color:var(--text)">'+f(tot.liquido)+'</td></tr>'+
+      '</tbody></table></div><p class="kpi-sub" style="margin-top:10px">Clique numa escola para filtrar a lista. "A receber" soma só quem ainda não pagou neste mês.</p></div>'+
+      '<div class="cc"><h3>Recebido × falta receber</h3><div style="height:'+(70+nomes.length*34)+'px"><canvas id="cPEsc"></canvas></div></div></div>'+
+    (hk.length>1?'<div class="cc" style="margin-bottom:16px"><h3>Evolução mês a mês</h3><div style="height:220px"><canvas id="cPHist"></canvas></div></div>':'')+
+    '<div class="sep"><div class="sep-lb">Alunos</div><div class="sep-line"></div></div>'+
+    '<div class="filters">'+P_FILT.map(function(p){var n=base.filter(p[2]).length;if(!n&&pF!==p[0]&&p[0]!=='faltam')return '';return '<button class="fb'+(pF===p[0]?' active':'')+'" onclick="setPF(\''+p[0]+'\')">'+p[1]+'<span class="n">'+n+'</span></button>';}).join('')+
+      '<div class="sw"><input type="search" id="psrch" placeholder="Buscar aluno ou responsável" oninput="renderPT()"></div></div>'+
+    '<div class="filters last"><span class="flabel">Escola</span><button class="fb'+(pEsc==='todas'?' active':'')+'" onclick="setPEsc(\'todas\')">Todas</button>'+
+      nomes.map(function(n){return '<button class="fb'+(pEsc===n?' active':'')+'" onclick="setPEsc(\''+esc(n).replace(/'/g,"\\'")+'\')">'+esc(n)+'<span class="n">'+ST[n].ativos+'</span></button>';}).join('')+'</div>'+
+    '<div class="tw"><table><thead><tr><th style="min-width:180px">Aluno</th><th>Escola</th><th style="min-width:150px">Responsável</th><th>Telefone</th><th class="num">Mensal.</th><th class="num">Recebido</th><th>Pago em</th><th>Forma</th><th>Status</th><th>Obs.</th><th>WA</th></tr></thead><tbody id="ptb"></tbody></table></div>'+
+  '</div>';
+  var q=(document.getElementById('psrch')||{value:''}).value;
+  body.innerHTML=html;
+  document.getElementById('psrch').value=q;
+  renderPT();
+
+  var css=getComputedStyle(document.documentElement), t3=css.getPropertyValue('--text3').trim(), t2=css.getPropertyValue('--text2').trim();
+  var tick={ticks:{color:t3,font:{family:'Inter',size:10}},grid:{color:'rgba(255,255,255,.05)'}};
+  var money={ticks:{color:t3,font:{family:'Inter',size:10},callback:function(v){return 'R$'+(v>=1000?(v/1000).toLocaleString('pt-BR')+'k':v);}},grid:{color:'rgba(255,255,255,.05)'}};
+  var leg={labels:{color:t2,font:{family:'Inter',size:11},usePointStyle:true}};
+  _ch.pEsc=new Chart(document.getElementById('cPEsc'),{type:'bar',data:{labels:nomes,datasets:[
+    {label:'Recebido',data:nomes.map(function(n){return ST[n].recebido;}),backgroundColor:'rgba(34,197,94,.75)',borderRadius:3},
+    {label:'Falta receber',data:nomes.map(function(n){return ST[n].falta;}),backgroundColor:'rgba(239,68,68,.6)',borderRadius:3}]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:leg,tooltip:{callbacks:{label:function(c){return c.dataset.label+': '+f(c.raw);}}}},scales:{x:Object.assign({},money,{stacked:true}),y:Object.assign({},tick,{stacked:true,grid:{display:false}})}}});
+  if(hk.length>1){
+    _ch.pHist=new Chart(document.getElementById('cPHist'),{type:'line',data:{labels:hk.map(mlabel),datasets:[
+      {label:'Esperado',data:hk.map(function(k){return parc.hist[k].esperado;}),borderColor:'#a78bfa',backgroundColor:'rgba(167,139,250,.08)',fill:true,tension:.35,pointRadius:3,borderWidth:2},
+      {label:'Recebido',data:hk.map(function(k){return parc.hist[k].recebido;}),borderColor:'#22c55e',backgroundColor:'rgba(34,197,94,.1)',fill:true,tension:.35,pointRadius:3,borderWidth:2},
+      {label:'Líquido Happy',data:hk.map(function(k){return parc.hist[k].liquido;}),borderColor:'#14b8a6',fill:false,tension:.35,pointRadius:3,borderWidth:2}]},
+      options:{responsive:true,maintainAspectRatio:false,plugins:{legend:leg},scales:{x:tick,y:money}}});
+  }
+}
+function renderPT(){
+  var data=pFiltered();_pRows=data;
+  var tb=document.getElementById('ptb');if(!tb)return;
+  if(!data.length){tb.innerHTML='<tr><td colspan="11" class="empty">Nenhum aluno com esses filtros</td></tr>';return;}
+  tb.innerHTML=data.map(function(r,i){
+    var bc=r.status==='Pago'?'bp':r.status==='Falta pagar'?'bv':r.status==='Cancelado'?'bn':r.status==='Escola cobra'?'bge':'bag';
+    var difTxt=r.dif?'<div class="aid" style="color:#fbbf24">'+(r.dif>0?'pagou '+f(r.dif)+' a mais':'pagou '+f(-r.dif)+' a menos')+'</div>':'';
+    var wa=r.status==='Falta pagar'&&waNum(r.tel)?'<button class="wbtn" onclick="enviarWppP('+i+')">WA →</button>':'<span class="muted">—</span>';
+    return '<tr>'+
+      '<td><div class="aname">'+esc(r.nome)+'</div><div class="aid">'+esc(r.curso||'turma não informada')+'</div></td>'+
+      '<td style="white-space:nowrap">'+esc(r.esc)+'</td>'+
+      '<td>'+esc(r.resp||'—')+(r.pag&&norm(r.pag)!==norm(r.resp)?'<div class="aid">paga: '+esc(r.pag)+'</div>':'')+'</td>'+
+      '<td class="tel">'+esc(r.tel||'—')+'</td>'+
+      '<td class="jmono num">'+r.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})+'</td>'+
+      '<td class="jmono num" style="color:'+(r.rec?'var(--green)':'var(--text3)')+'">'+(r.rec?r.rec.toLocaleString('pt-BR',{minimumFractionDigits:2}):'—')+difTxt+'</td>'+
+      '<td class="jmono muted">'+ddmm(r.dp&&new Date(r.dp))+'</td>'+
+      '<td style="white-space:nowrap">'+esc(r.forma||'—')+'</td>'+
+      '<td><span class="badge '+bc+'">'+esc(r.status)+'</span></td>'+
+      '<td class="obs">'+esc(r.atraso||r.obs||'')+'</td>'+
+      '<td>'+wa+'</td></tr>';
+  }).join('');
+}
+function setPF(v){pF=v;renderParc();}
+function setPEsc(v){pEsc=v;renderParc();}
+function enviarWppP(i){
+  var r=_pRows[i], mes=MES_NOME[+parc.data.mes.slice(5)].toLowerCase();
+  var nomeResp=(r.resp||'').split(/[\s\-\/]/)[0];
+  var msg='Olá'+(nomeResp?' '+nomeResp:'')+'! 👋\n\nPassando para lembrar da mensalidade de '+mes+' das aulas de *'+r.nome+'*'+(r.esc!==ESC_PROPRIA?' ('+r.esc+')':'')+'.\n\n💰 Valor: *'+f(r.valor)+'*'+(r.atraso?'\n\nConsta também em aberto: '+r.atraso.replace(/^n[aã]o pagou\s*/i,'')+'.':'')+'\n\nQualquer dúvida, estamos à disposição!\n\n*Escola Happy Florianópolis* 🎒';
+  window.open('https://wa.me/'+waNum(r.tel)+'?text='+encodeURIComponent(msg),'_blank');
+}
+function exportParc(){
+  var data=pFiltered();
+  var rows=[['Aluno','Escola','Turma','Responsável','Pagador','Telefone','Mensalidade','Recebido','Pago em','Forma','Status','Repasse escola','Obs']];
+  data.forEach(function(r){rows.push([r.nome,r.esc,r.curso,r.resp,r.pag,r.tel,r.valor,r.rec,r.dp?new Date(r.dp).toLocaleDateString('pt-BR'):'',r.forma,r.status,round2(r.repRec),r.atraso||r.obs]);});
+  var wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(rows),'Escolas parceiras');
+  XLSX.writeFile(wb,'happy_escolas_parceiras_'+new Date().toLocaleDateString('pt-BR').replace(/\//g,'-')+'.xlsx');
+}
+
 /* ===== Início ===== */
+loadParc();
 load();
 try{var su=localStorage.getItem(STORE_KEY+'_unit');if(su&&(su==='todas'||UNITS[su]))setUnit(su,true);}catch(e){}
 renderAll();
