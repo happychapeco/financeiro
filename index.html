@@ -121,6 +121,7 @@ tbody tr.risco td{background:rgba(239,68,68,.06)}
 .sep-lb{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.1em;color:var(--text3);white-space:nowrap}
 .sep-line{flex:1;height:1px;background:var(--border)}
 .cmp td,.cmp th{padding:9px 12px}
+.rtot{padding:20px 28px 0}.rtot .cc{margin:0}.analytics .rtot{padding:0 0 8px}.rtot .cmp tr.tot td{border-top:1px solid var(--border2);color:var(--text);font-weight:700}
 .cmp td.lead{color:var(--text);font-weight:600;white-space:nowrap}
 .delta{font-size:10px;margin-left:6px}
 .pwrap{padding:0 28px 28px}
@@ -132,7 +133,7 @@ tbody tr.risco td{background:rgba(239,68,68,.06)}
 .tel{font-family:'JetBrains Mono',monospace;font-size:11px;white-space:nowrap}
 body.parc-on #units,body.parc-on #units+.howto,body.parc-on #useg{display:none}
 @media (max-width:640px){
-  .hdr,.tabs,.units,.howto,.metrics,.filters,.tw,.analytics,#sbar{padding-left:16px;padding-right:16px}
+  .hdr,.tabs,.units,.howto,.rtot,.metrics,.filters,.tw,.analytics,#sbar{padding-left:16px;padding-right:16px}
   .sw{margin-left:0;width:100%}.sw input{width:100%}
   .emptyst{margin:16px}
 }
@@ -180,6 +181,7 @@ body.parc-on #units,body.parc-on #units+.howto,body.parc-on #useg{display:none}
 </div>
 
 <div class="page active" id="page-painel">
+  <div id="rtot"></div>
   <div id="dash">
     <div class="metrics" id="mets"></div>
     <div class="filters" id="st-filters"></div>
@@ -445,6 +447,7 @@ function renderAll(){
   document.getElementById('th-un').style.display=curU==='todas'?'':'none';
   document.getElementById('refp').textContent='Hoje '+new Date().toLocaleDateString('pt-BR');
   if(has){renderFilters();renderM();renderT();}
+  document.getElementById('rtot').innerHTML=receitaTotal();
   if(document.getElementById('page-analytics').classList.contains('active'))renderAnalytics();
 }
 function renderUnits(){
@@ -558,6 +561,27 @@ function exportXLSX(){
 }
 
 /* ===== Analytics ===== */
+// Receita de todas as fontes, lado a lado (Space por unidade + escolas parceiras), em valor líquido para a Happy
+function receitaTotal(){
+  if(curU==='chapeco')return '';
+  var L=[];
+  (curU==='todas'?['chapeco','floripa']:['floripa']).forEach(function(u){
+    var d=state.units[u];if(!d)return;
+    var rows=d.rows,pg=rows.filter(isPago),pot=sum(rows,'hub'),rec=sum(pg,'hub');
+    L.push({nome:'<span class="uchip"><span class="dot '+u+'"></span>'+UNITS[u].nome+' · Space</span>',al:rows.length,rec:rec,ab:pot-rec,pot:pot});
+  });
+  if(parc.data){
+    var t=pTotais(parc.data.rows),ab=0;
+    parc.data.rows.forEach(function(r){if(r.status==='Falta pagar')ab+=r.valor-r.repEsp;});
+    L.push({nome:'<span class="uchip"><span class="dot floripa"></span>Florianópolis · Escolas parceiras</span>',al:t.ativos,rec:t.liquido,ab:ab,pot:t.liquido+ab});
+  }
+  if(L.length<2)return '';
+  var T={al:0,rec:0,ab:0,pot:0};L.forEach(function(l){['al','rec','ab','pot'].forEach(function(k){T[k]+=l[k];});});
+  function row(l,cls){return '<tr'+(cls?' class="'+cls+'"':'')+'><td class="lead">'+l.nome+'</td><td class="num jmono">'+l.al+'</td><td class="num jmono" style="color:var(--green)">'+f(l.rec)+'</td><td class="num jmono" style="color:var(--red)">'+f(l.ab)+'</td><td class="num jmono">'+f(l.pot)+'</td></tr>';}
+  return '<div class="rtot"><div class="cc"><h3>Receita total do mês — todas as fontes</h3><div class="tscroll"><table class="cmp"><thead><tr><th>Fonte</th><th class="num">Alunos</th><th class="num">Recebido</th><th class="num">A receber</th><th class="num">Potencial</th></tr></thead><tbody>'+
+    L.map(function(l){return row(l);}).join('')+row({nome:'Total',al:T.al,rec:T.rec,ab:T.ab,pot:T.pot},'tot')+
+    '</tbody></table></div><p class="kpi-sub" style="margin-top:10px">Valor que fica para a Happy: HUB no Space; recebido menos repasse nas escolas parceiras. Os cartões e a lista abaixo continuam só com o Space.</p></div></div>';
+}
 function kpi(lb,vl,sb,color,pct){return '<div class="kpi"><div class="kpi-lb">'+lb+'</div><div class="kpi-vl" style="color:'+color+'">'+vl+'</div><div class="kpi-sub">'+sb+'</div>'+(pct!==undefined?'<div class="pbar"><div class="pfill" style="width:'+Math.min(100,pct)+'%;background:'+color+'"></div></div>':'')+'</div>';}
 function sep(t){return '<div class="sep"><div class="sep-lb">'+t+'</div><div class="sep-line"></div></div>';}
 function unitStats(rows){
@@ -626,7 +650,7 @@ function renderAnalytics(){
       labels.map(function(k){var c=cats[k];return '<tr><td class="lead">'+k+'</td><td class="num jmono">'+c.alunos+'</td><td class="num jmono muted">'+(c.alunos/data.length*100).toFixed(0)+'%</td><td class="num jmono" style="color:var(--green)">'+c.pagos+'</td><td class="num jmono" style="color:var(--green)">'+f(c.pago)+'</td><td class="num jmono" style="color:var(--red)">'+f(c.aberto)+'</td></tr>';}).join('')+
       '</tbody></table></div></div></div>';
   }
-  an.innerHTML=html;
+  an.innerHTML=receitaTotal()+html;
 
   var base={responsive:true,maintainAspectRatio:false};
   if(document.getElementById('cCmp')){
@@ -735,7 +759,7 @@ function processParc(file){
       parc.data={rows:res.rows,mes:res.mes,importedAt:new Date().toISOString(),fileName:file.name};
       var t=pTotais(res.rows);
       parc.hist[res.mes]={alunos:t.ativos,pagos:t.pagos,esperado:round2(t.esperado),recebido:round2(t.recebido),falta:round2(t.falta),liquido:round2(t.liquido)};
-      saveParc();renderParc();
+      saveParc();renderParc();renderAll();
       showOk('✓ Escolas parceiras: '+res.rows.length+' alunos importados · '+new Date().toLocaleTimeString('pt-BR'));
     }catch(err){showErr('Não consegui ler a planilha: '+err.message);}
   };
