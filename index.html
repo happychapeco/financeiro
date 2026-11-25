@@ -308,11 +308,17 @@ function parseRows(rows){
     var key=s(r,'ID_FINANCEIRO')||s(r,'ID_MATRICULA')||s(r,'ID_COBRANCA');
     (groups[key]=groups[key]||[]).push(r);
   });
-  var out=[];
+  var out=[], picked={}, outros={};
   Object.keys(groups).forEach(function(key){
     var g=groups[key];
     // Mesma cobrança em mais de uma linha (ex.: parcela repactuada + parcela paga): vale a paga; senão a que não foi repactuada.
-    var r=g.find(function(x){return s(x,'STATUS_PARCELA')==='Pago';})||g.find(function(x){return s(x,'STATUS_PARCELA')!=='REPACTUADO';})||g[0];
+    picked[key]=g.find(function(x){return s(x,'STATUS_PARCELA')==='Pago';})||g.find(function(x){return s(x,'STATUS_PARCELA')!=='REPACTUADO';})||g[0];
+    if(s(picked[key],'STATUS_PARCELA')!=='REPACTUADO'){var n=s(picked[key],'ALUNO').toLowerCase();outros[n]=(outros[n]||0)+1;}
+  });
+  Object.keys(picked).forEach(function(key){
+    var r=picked[key];
+    // Na repactuação o Space abre outra matrícula (outro ID_FINANCEIRO) com a cobrança renegociada; a antiga sai da conta.
+    if(s(r,'STATUS_PARCELA')==='REPACTUADO'&&outros[s(r,'ALUNO').toLowerCase()])return;
     out.push(buildRow(r,key));
   });
   return out.sort(function(a,b){return a.nome.localeCompare(b.nome,'pt-BR');});
