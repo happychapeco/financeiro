@@ -268,6 +268,7 @@ function load(){
     state.hist[u]=h;
   });
   state.risco=state.risco||[];
+  state.tel=state.tel||{};
 }
 function save(){try{localStorage.setItem(STORE_KEY,JSON.stringify(state));}catch(e){showErr('Não foi possível salvar neste navegador. Os dados valem só até fechar a página.');}}
 
@@ -531,7 +532,7 @@ function renderT(){
       '<td>'+fim+'</td>'+
       '<td><span class="badge '+bc+'">'+esc(r.status)+'</span></td>'+
       '<td>'+al+'</td>'+
-      '<td>'+(p?'<span class="muted">—</span>':'<button class="wbtn" onclick="enviarWpp('+i+')">WA →</button>')+'</td>'+
+      '<td>'+(p?'<span class="muted">—</span>':'<button class="wbtn" onclick="enviarWpp('+i+')">WA →</button>'+(state.tel[telKey(r)]?'<div class="aid" style="cursor:pointer" title="Trocar telefone" onclick="trocarTel('+i+')">'+esc(state.tel[telKey(r)].slice(2))+' ✎</div>':''))+'</td>'+
     '</tr>';
   }).join('');
 }
@@ -547,8 +548,17 @@ function enviarWpp(i){
   var st=d!==null&&d<0?'está *em atraso* desde '+ddmm(new Date(r.vcto)):'vence em '+ddmm(r.vcto&&new Date(r.vcto));
   var quem=r.nome?'de *'+r.nome+'*':'do curso *'+r.curso+'*';
   var msg='Olá '+(r.resp.split(/[\s\/]/)[0]||'')+'! 👋\n\nPassando para lembrar que a mensalidade '+quem+' '+st+'.\n\n💰 Valor: *'+f(r.valor)+'*\n\nQualquer dúvida, estamos à disposição!\n\n*'+UNITS[r.unit].assinatura+'* 🎒';
-  window.open('https://wa.me/?text='+encodeURIComponent(msg),'_blank');
+  // O relatório do Space não traz telefone: pede uma vez e guarda por aluno neste navegador.
+  var tk=telKey(r), num=state.tel[tk];
+  if(!num){
+    var t=prompt('WhatsApp de '+(r.resp||'responsável')+' ('+(r.nome||r.curso)+')\nEx.: 48 99999-9999',''); if(t===null)return;
+    num=waNum(t); if(!num){showErr('Telefone inválido. Use DDD + número.');return;}
+    state.tel[tk]=num;save();
+  }
+  window.open('https://web.whatsapp.com/send?phone='+num+'&text='+encodeURIComponent(msg),'_blank');
 }
+function telKey(r){return r.unit+'__'+norm(r.resp||r.nome);}
+function trocarTel(i){var r=_rowsShown[i];delete state.tel[telKey(r)];save();enviarWpp(i);}
 function switchTab(tab,btn){
   document.querySelectorAll('.tab').forEach(function(b){b.classList.remove('active');});btn.classList.add('active');
   document.querySelectorAll('.page').forEach(function(p){p.classList.remove('active');});
